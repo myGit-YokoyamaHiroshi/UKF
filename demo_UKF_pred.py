@@ -77,8 +77,11 @@ def main():
     b          = 50
     p          = 220
     
-    UT         = 1E-5
-    Q          = UT * np.diag(np.hstack((np.ones(6), 10*np.ones(5))))
+    # UT         = 1E-5
+    # Q          = UT * np.diag(np.hstack((np.ones(6), 10*np.ones(5))))
+    # R          = (1-UT) * 0.5 + UT * 1
+
+    Q          = np.diag(np.hstack((1E-6 * np.ones(6), 1E-4*np.ones(5))))
     R          = 1
     
     xEst       = np.zeros(Nstate)
@@ -95,7 +98,8 @@ def main():
     loglike     = np.zeros(Nt)
     
     ## initialization
-    model = UKF_JansenRit(xEst, PEst, Q, R, UT, dt)
+    # model = UKF_JansenRit(xEst, PEst, Q, R, UT, dt)
+    model = UKF_JansenRit(xEst, PEst, Q, R, dt)
     
     for t in range(1,Nt):
         z = eeg_observe[t-1] + 0.1 * np.random.randn()

@@ -12,9 +12,9 @@ from scipy.linalg import sqrtm, cholesky
 
 
 class UKF_JansenRit:
-    def __init__(self, X, P, Q, R, UT, dt):
+    def __init__(self, X, P, Q, R, dt):
         nx      = len(X)
-        ALPHA   = 1E-2
+        ALPHA   = 1E-4
         BETA    = 2
         KAPPA   = 0
         
@@ -24,7 +24,7 @@ class UKF_JansenRit:
         Wc = [(lamda / (lamda + nx)) + (1 - ALPHA ** 2 + BETA)]
         for i in range(2 * nx):
             Wm.append(1.0 / (2 * (nx + lamda)))
-            Wc.append(1.0 / (2 * (nx + lamda)))
+            Wc.append(1.0 / (2 * (nx + lamda))) 
         
         gamma = np.sqrt(nx + lamda)
         Wm    = np.array(Wm)
@@ -35,7 +35,6 @@ class UKF_JansenRit:
         self.P     = P
         self.Q     = Q
         self.R     = R
-        self.UT    = UT
         self.dt    = dt
         self.gamma = gamma
         self.Wm    = Wm
@@ -95,6 +94,25 @@ class UKF_JansenRit:
         dX    = np.hstack((dx, np.zeros(par.shape)))
         return dX
 
+    def state_func(self, x, par):
+        dt    = self.dt
+        X_now = np.hstack((x, par))
+        
+        k1   = self.JansenRit_model(X_now[:6], X_now[6:])
+
+        X_k2 = X_now + (dt/2)*k1
+        k2   = self.JansenRit_model(X_k2[:6], X_k2[6:])
+        
+        X_k3 = X_now + (dt/2)*k2
+        k3   = self.JansenRit_model(X_k3[:6], X_k3[6:])
+        
+        X_k4 = X_now + dt*k3
+        k4   = self.JansenRit_model(X_k4[:6], X_k4[6:])
+        
+        X_next = X_now + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+        
+        return X_next
+    
     ###################
     def generate_sigma_points(self, x, P, gamma):
         sigma = x
@@ -122,7 +140,12 @@ class UKF_JansenRit:
         Wc      = self.Wc
         
         X_sgm   = self.generate_sigma_points(X, P, gamma)
-        X_sgm   = np.array([X_sgm[:,i] + self.JansenRit_model(X_sgm[:6,i], X_sgm[6:,i]) * dt for i in range(len(Wc))]).T
+        
+        # # x=f(x) : Eular method
+        # X_sgm   = np.array([X_sgm[:,i] + self.JansenRit_model(X_sgm[:6,i], X_sgm[6:,i]) * dt for i in range(len(Wc))]).T
+        
+        # x=f(x) : Runge-kutta method
+        X_sgm   = np.array([self.state_func(X_sgm[:6,i], X_sgm[6:,i]) for i in range(len(Wc))]).T
         XPred   = (Wm @ X_sgm.T).T
         
         PPred   = np.zeros(P.shape) + Q
@@ -141,7 +164,6 @@ class UKF_JansenRit:
         P     = self.P
         
         R     = self.R
-        UT    = self.UT
         dt    = self.dt
         gamma = self.gamma
         Wm    = self.Wm
@@ -154,8 +176,8 @@ class UKF_JansenRit:
                           [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
                           [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
                          ])
-        ub    = np.array([5.00,  100,  60,   100,  300])
-        lb    = np.array([0.00,   10, 0.00,   10,  180])
+        ub    = np.array([10.00,  500,   60,  500,  300])
+        lb    = np.array([ 0.01,    1, 0.01,    1,    0])
         b     = np.zeros(ub.shape)
         
         H     = np.array([[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0]])
@@ -178,7 +200,7 @@ class UKF_JansenRit:
         Pzz_inv = np.linalg.inv(Pzz)
         
         K       = Pxz @ Pzz_inv # Kalman Gain
-        X_new   = X + K @ y
+        X_new   = X + K @ y        
         P_new   = P - K @ Pzz @ K.T
         
         
@@ -202,7 +224,7 @@ class UKF_JansenRit:
                 X_new[i+6] = X_c[i+6]
         ##### inequality constraints ##########################################
         
-        # R     = (1-UT) * R + UT * y**2        
+            
         ### log-likelihood
         _, logdet = np.linalg.slogdet(Pzz)
         
